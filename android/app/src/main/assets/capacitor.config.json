@@ -1,0 +1,8 @@
+{
+	"appId": "uz.meyor.app",
+	"appName": "Me'yor",
+	"webDir": "www",
+	"android": {
+		"allowMixedContent": false
+	}
+}

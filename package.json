@@ -1,0 +1,17 @@
+{
+  "name": "meyor",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Me'yor - kaloriya hisoblagich",
+  "scripts": {
+    "sync": "cap sync android"
+  },
+  "dependencies": {
+    "@capacitor/core": "8.5.2",
+    "@capacitor/android": "8.5.2",
+    "@capacitor-community/speech-recognition": "7.0.1"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.5.2"
+  }
+}
