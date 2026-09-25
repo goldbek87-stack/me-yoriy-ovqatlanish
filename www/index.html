@@ -190,12 +190,15 @@ nav.tabs button[aria-selected="true"]{color:var(--cobalt)}
   </div>
   <div class="card">
     <h2>Rasm orqali hisoblash (AI)</h2>
-    <p class="muted small">Rasmdagi ovqatni AI taniydi. Buning uchun AI server manzili va maxfiy so'z kerak (qo'llanmada bor).</p>
-    <label class="muted small" for="aiUrl">Server manzili</label>
-    <input id="aiUrl" placeholder="https://meyor-ai.vercel.app" inputmode="url" autocapitalize="off" spellcheck="false">
+    <p class="muted small">📷 tugmasi tayyor holda ishlaydi, hech narsa sozlash shart emas.</p>
+    <div class="row" style="margin-top:6px"><button class="btn ghost" id="aiSave" style="flex:1">Ulanishni tekshirish</button></div>
+    <details style="margin-top:10px"><summary class="muted small" style="cursor:pointer">Qo'shimcha sozlama</summary>
+    <label class="muted small" for="aiUrl" style="display:block;margin-top:8px">Server manzili</label>
+    <input id="aiUrl" inputmode="url" autocapitalize="off" spellcheck="false">
     <label class="muted small" for="aiTok" style="display:block;margin-top:8px">Maxfiy so'z (APP_TOKEN)</label>
     <input id="aiTok" autocapitalize="off" spellcheck="false">
-    <div class="row" style="margin-top:10px"><button class="btn ghost" id="aiSave" style="flex:1">Saqlash va tekshirish</button></div>
+    <p class="muted small" style="margin:6px 0 0">Bo'sh qoldirilsa, ilovadagi standart server ishlatiladi.</p>
+    </details>
     <p class="small" id="aiStatus" style="margin:8px 0 0"></p>
   </div>
   <div class="card">
@@ -1097,20 +1100,22 @@ if(profile) setTimeout(()=>scheduleAll(false),1500);
 
 
 /* ===== RASM ORQALI HISOBLASH (AI) ===== */
+const AI_DEFAULT={url:'https://meyor-ai-three.vercel.app',tok:'meyor2026'};
 let aiCfg=S.get('ai',{url:'',tok:''});
+function aiUrlEff(){return (aiCfg.url||'').trim()||AI_DEFAULT.url;}
+function aiTokEff(){return (aiCfg.url||'').trim()?(aiCfg.tok||''):AI_DEFAULT.tok;}
 let aiNote=null;
 $('aiUrl').value=aiCfg.url||'';$('aiTok').value=aiCfg.tok||'';
-function aiBase(){return (aiCfg.url||'').trim().replace(/\/+$/,'');}
+function aiBase(){return aiUrlEff().replace(/\/+$/,'');}
 $('aiSave').onclick=async()=>{
   let u=$('aiUrl').value.trim();if(u&&!/^https?:\/\//.test(u))u='https://'+u;
   aiCfg={url:u,tok:$('aiTok').value.trim()};S.set('ai',aiCfg);$('aiUrl').value=u;
-  if(!u){$('aiStatus').textContent='';return;}
   $('aiStatus').innerHTML='<span class="spin"></span>Tekshirilmoqda… (uxlab yotgan server 30–60 soniyada uyg\'onadi)';
   try{
     const ctrl=new AbortController();const to=setTimeout(()=>ctrl.abort(),90000);
-    const r=await fetch(aiBase()+'/api/health',{headers:{'X-App-Token':aiCfg.tok},signal:ctrl.signal});clearTimeout(to);
+    const r=await fetch(aiBase()+'/api/health',{headers:{'X-App-Token':aiTokEff()},signal:ctrl.signal});clearTimeout(to);
     const j=await r.json().catch(()=>({}));
-    if(r.status===401) $('aiStatus').innerHTML='<span style="color:var(--anor)">Maxfiy so\'z noto\'g\'ri. Serverdagi APP_TOKEN bilan bir xil yozing.</span>';
+    if(r.status===401) $('aiStatus').innerHTML='<span style="color:var(--anor)">Maxfiy so\'z serverdagi APP_TOKEN bilan mos kelmadi.</span>';
     else if(!r.ok||!j.ok) $('aiStatus').innerHTML='<span style="color:var(--anor)">Server javob bermadi. Manzilni tekshiring.</span>';
     else if(!j.key) $('aiStatus').innerHTML='<span style="color:var(--saffron)">Server ishlayapti, lekin unda GEMINI_API_KEY sozlanmagan.</span>';
     else $('aiStatus').innerHTML='<span style="color:var(--leaf)">✓ Ulandi. Endi 📷 tugmasi ishlaydi.</span>';
@@ -1157,10 +1162,10 @@ async function runAI(p){
   p.state='ai';renderPreview();
   try{
     const ctrl=new AbortController();const to=setTimeout(()=>ctrl.abort(),120000);
-    const r=await fetch(aiBase()+'/api/photo',{method:'POST',signal:ctrl.signal,headers:{'Content-Type':'application/json','X-App-Token':aiCfg.tok||''},
+    const r=await fetch(aiBase()+'/api/photo',{method:'POST',signal:ctrl.signal,headers:{'Content-Type':'application/json','X-App-Token':aiTokEff()},
       body:JSON.stringify({image:p.img,mime:'image/jpeg',hint:p.hint||'',names:allFoods().map(f=>f.name)})});
     clearTimeout(to);const j=await r.json().catch(()=>({}));
-    if(!r.ok){ throw new Error(r.status===401?"Maxfiy so'z noto'g'ri. Profil bo'limida tekshiring.":r.status===429?"AI kunlik limiti tugadi. Birozdan keyin urinib ko'ring yoki matn bilan yozing.":(j.error||'Server xatosi')); }
+    if(!r.ok){ throw new Error(r.status===401?"Server maxfiy so'zni qabul qilmadi. Profil → Qo'shimcha sozlamani tekshiring.":r.status===429?"AI kunlik limiti tugadi. Birozdan keyin urinib ko'ring yoki matn bilan yozing.":(j.error||'Server xatosi')); }
     const items=j.items||[];
     if(!items.length) throw new Error(j.note||"Rasmda ovqat topilmadi. Boshqa burchakdan suratga oling.");
     const index=buildIndex(allFoods());const out=[];
