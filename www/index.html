@@ -119,6 +119,13 @@ nav.tabs button[aria-selected="true"]{color:var(--cobalt)}
 .scanbox video{width:100%;height:100%;object-fit:cover;display:block}
 .scanbox::after{content:"";position:absolute;left:10%;right:10%;top:50%;height:2px;background:var(--anor);box-shadow:0 0 8px var(--anor)}
 .bc{font-size:12px;color:var(--muted)}
+
+.inrow .mic{flex:0 0 48px;width:48px}
+.aithumb{display:flex;gap:10px;align-items:center;margin:8px 0}
+.aithumb img{width:64px;height:64px;object-fit:cover;border-radius:10px;flex:0 0 64px}
+.conf{font-size:11px;padding:1px 6px;border-radius:8px;background:var(--soft);color:var(--cobalt);margin-left:4px;white-space:nowrap}
+.conf.low{background:color-mix(in srgb,var(--saffron) 20%,transparent);color:var(--saffron)}
+.photoprev{width:100%;max-height:260px;object-fit:cover;border-radius:14px;margin:8px 0}
 </style></head><body>
 <div class="wrap">
 <header class="top"><h1>Me'yor</h1><span class="d" id="today"></span></header>
@@ -136,6 +143,7 @@ nav.tabs button[aria-selected="true"]{color:var(--cobalt)}
     <div class="inrow">
       <button class="mic" id="micBtn" aria-label="Ovoz bilan kiritish" title="Ovoz bilan kiritish">🎤</button>
       <button class="mic" id="scanBtn" aria-label="Shtrix-kodni skanerlash" title="Shtrix-kodni skanerlash"><svg width="24" height="20" viewBox="0 0 24 20" aria-hidden="true"><g fill="currentColor"><rect x="0" y="0" width="2" height="20"/><rect x="4" y="0" width="1" height="20"/><rect x="7" y="0" width="3" height="20"/><rect x="12" y="0" width="1" height="20"/><rect x="15" y="0" width="2" height="20"/><rect x="19" y="0" width="1" height="20"/><rect x="22" y="0" width="2" height="20"/></g></svg></button>
+      <button class="mic" id="photoBtn" aria-label="Rasmga olib hisoblash" title="Rasmga olib hisoblash">📷</button>
       <button class="btn" id="calcBtn">Hisoblash</button>
     </div>
     <div class="chips" id="chips"></div>
@@ -181,6 +189,16 @@ nav.tabs button[aria-selected="true"]{color:var(--cobalt)}
     <div id="custom"></div>
   </div>
   <div class="card">
+    <h2>Rasm orqali hisoblash (AI)</h2>
+    <p class="muted small">Rasmdagi ovqatni AI taniydi. Buning uchun AI server manzili va maxfiy so'z kerak (qo'llanmada bor).</p>
+    <label class="muted small" for="aiUrl">Server manzili</label>
+    <input id="aiUrl" placeholder="https://meyor-ai.vercel.app" inputmode="url" autocapitalize="off" spellcheck="false">
+    <label class="muted small" for="aiTok" style="display:block;margin-top:8px">Maxfiy so'z (APP_TOKEN)</label>
+    <input id="aiTok" autocapitalize="off" spellcheck="false">
+    <div class="row" style="margin-top:10px"><button class="btn ghost" id="aiSave" style="flex:1">Saqlash va tekshirish</button></div>
+    <p class="small" id="aiStatus" style="margin:8px 0 0"></p>
+  </div>
+  <div class="card">
     <h2>Eslatmalar</h2>
     <p class="muted small" id="remNote">Telefon sizga ovqatni kiritish, suv ichish va mashq qilishni eslatib turadi.</p>
     <div id="rem"></div>
@@ -193,6 +211,7 @@ nav.tabs button[aria-selected="true"]{color:var(--cobalt)}
   </div>
 </section>
 </div>
+<input type="file" id="photoIn" accept="image/*" capture="environment" hidden>
 
 <nav class="tabs" role="tablist"><div class="in">
   <button role="tab" data-tab="home" aria-selected="true"><span class="ic">🍽️</span>Bugun</button>
@@ -655,7 +674,7 @@ $('meal').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.prev
 function calc(){
   const txt=$('meal').value.trim(); if(!txt){toast("Avval nima yeganingizni yozing");return;}
   const r=parseMeal(txt,allFoods());
-  pending=pending.filter(p=>p.src==='shtrix-kod'||p.barcode).concat(r.items.map(i=>({...i,uid:Math.random().toString(36).slice(2)})));
+  pending=pending.filter(p=>p.src==='shtrix-kod'||p.barcode||p.src==='rasm (AI)'||p.ai).concat(r.items.map(i=>({...i,uid:Math.random().toString(36).slice(2)})));
   r.unknown.forEach(u=>pending.push({uid:Math.random().toString(36).slice(2),unknown:true,text:u.text,qty:u.qty,unit:u.unit,mult:u.mult,state:'search'}));
   renderPreview();
   pending.filter(p=>p.unknown).forEach(lookupOnline);
@@ -686,18 +705,22 @@ function renderPreview(){
   let h='<h3>Hisob natijasi</h3>';
   for(const p of pending){
     if(!p.unknown){
-      h+=`<div class="item"><div class="nm"><b>${esc(p.name)}</b><span class="small muted">${fmtQ(p)}${p.fuzzy?` · «${esc(p.typed)}» deb yozildi`:''}${p.src==='internet'?' · internetdan':''}</span></div>
+      h+=`<div class="item"><div class="nm"><b>${esc(p.name)}</b><span class="small muted">${fmtQ(p)}${p.fuzzy?` · «${esc(p.typed)}» deb yozildi`:''}${p.src==='internet'?' · internetdan':''}${p.src==='rasm (AI)'?`<span class="conf ${p.conf<0.6?'low':''}">AI ${Math.round((p.conf||0)*100)}%</span>`:''}</span></div>
       <input class="gin" type="number" inputmode="numeric" value="${p.grams}" data-g="${p.uid}" aria-label="gramm"><span class="small muted">${p.drink?'ml':'g'}</span>
       <span class="kc num">${p.kcal}</span><button class="x" data-rm="${p.uid}" aria-label="O'chirish">✕</button></div>`;
     } else {
       h+=`<div class="note ${p.state==='search'?'':'warn'}">«<b>${esc(p.text)}</b>» bazada topilmadi. `;
-      if(p.state==='search') h+=`<span class="spin"></span>Internetdagi ochiq bazadan qidirilmoqda…`;
+      if(p.ai){ h=h.replace(/«<b>[^<]*<\/b>» bazada topilmadi\. $/,'');
+        h+=`<div class="aithumb"><img src="${p.thumb}" alt="Yuborilgan rasm"><div>${p.state==='ai'?'<span class="spin"></span>Rasm tahlil qilinmoqda… Birinchi marta 30–60 soniya ketishi mumkin.':esc(p.err||'')}</div></div>`;
+        if(p.state==='aierr') h+=`<button class="btn ghost" style="width:100%" data-airetry="${p.uid}">Qayta urinish</button>`;
+      }
+      else if(p.state==='search') h+=`<span class="spin"></span>Internetdagi ochiq bazadan qidirilmoqda…`;
       else if(p.state==='found'){ h+='Internetdan topildi, mosini tanlang (100 g uchun):';
         p.options.forEach((o,i)=>h+=`<button class="opt" data-pick="${p.uid}" data-i="${i}"><span>${esc(o.name)}${o.brand?' <span class="muted small">'+esc(o.brand)+'</span>':''}</span><b class="num">${o.kcal}</b></button>`);
         h+=`<button class="chip" style="margin-top:8px" data-man="${p.uid}">Mos kelmadi — o'zim kiritaman</button>`; }
       else { h+=(p.state==='offline'?"Internet bazasiga ulanib bo'lmadi. ":"Internetda ham topilmadi. ")+"Kaloriyani o'zingiz kiriting — keyingi safar ilova uni eslab qoladi.";
         h+=manualForm(p); }
-      h+=`<button class="x" data-rm="${p.uid}" style="float:right;margin-top:-4px">✕ olib tashlash</button><div style="clear:both"></div></div>`;
+      if(!(p.ai&&p.state==='ai')) h+=`<button class="x" data-rm="${p.uid}" style="float:right;margin-top:-4px">✕ olib tashlash</button><div style="clear:both"></div>`; h+='</div>';
     }
   }
   const ok=pending.filter(p=>!p.unknown), sum=ok.reduce((a,p)=>a+p.kcal,0);
@@ -871,7 +894,7 @@ function renderProfile(){
   $('custom').innerHTML=custom.length?custom.map(c=>`<div class="item"><div class="nm"><b>${esc(c.name)}</b><span class="small muted">${c.kcal} kkal / 100 g${c.barcode?' · shtrix-kod':''}</span></div><button class="x" data-cdel="${c.id}" aria-label="O'chirish">✕</button></div>`).join(''):'<p class="muted small">Hozircha yo\'q.</p>';
 }
 $('custom').addEventListener('click',e=>{const id=e.target.dataset.cdel;if(!id)return;custom=custom.filter(c=>c.id!==id);S.set('custom',custom);renderProfile();});
-$('resetBtn').onclick=()=>{if(!confirm("Barcha ma'lumotlar o'chiriladi. Davom etasizmi?"))return;['profile','logs','tasks','water','custom','weights','flags','lang','rems','askedNotif'].forEach(k=>{try{localStorage.removeItem('meyor_'+k);}catch(e){}delete MEM[k];});location.reload();};
+$('resetBtn').onclick=()=>{if(!confirm("Barcha ma'lumotlar o'chiriladi. Davom etasizmi?"))return;['profile','logs','tasks','water','custom','weights','flags','lang','rems','askedNotif','ai'].forEach(k=>{try{localStorage.removeItem('meyor_'+k);}catch(e){}delete MEM[k];});location.reload();};
 
 /* ===== OVOZ ===== */
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;let rec=null;
@@ -1071,5 +1094,103 @@ const _commit=commit;
 commit=function(){_commit();scheduleAll(false);};
 renderRem();
 if(profile) setTimeout(()=>scheduleAll(false),1500);
+
+
+/* ===== RASM ORQALI HISOBLASH (AI) ===== */
+let aiCfg=S.get('ai',{url:'',tok:''});
+let aiNote=null;
+$('aiUrl').value=aiCfg.url||'';$('aiTok').value=aiCfg.tok||'';
+function aiBase(){return (aiCfg.url||'').trim().replace(/\/+$/,'');}
+$('aiSave').onclick=async()=>{
+  let u=$('aiUrl').value.trim();if(u&&!/^https?:\/\//.test(u))u='https://'+u;
+  aiCfg={url:u,tok:$('aiTok').value.trim()};S.set('ai',aiCfg);$('aiUrl').value=u;
+  if(!u){$('aiStatus').textContent='';return;}
+  $('aiStatus').innerHTML='<span class="spin"></span>Tekshirilmoqda… (uxlab yotgan server 30–60 soniyada uyg\'onadi)';
+  try{
+    const ctrl=new AbortController();const to=setTimeout(()=>ctrl.abort(),90000);
+    const r=await fetch(aiBase()+'/api/health',{headers:{'X-App-Token':aiCfg.tok},signal:ctrl.signal});clearTimeout(to);
+    const j=await r.json().catch(()=>({}));
+    if(r.status===401) $('aiStatus').innerHTML='<span style="color:var(--anor)">Maxfiy so\'z noto\'g\'ri. Serverdagi APP_TOKEN bilan bir xil yozing.</span>';
+    else if(!r.ok||!j.ok) $('aiStatus').innerHTML='<span style="color:var(--anor)">Server javob bermadi. Manzilni tekshiring.</span>';
+    else if(!j.key) $('aiStatus').innerHTML='<span style="color:var(--saffron)">Server ishlayapti, lekin unda GEMINI_API_KEY sozlanmagan.</span>';
+    else $('aiStatus').innerHTML='<span style="color:var(--leaf)">✓ Ulandi. Endi 📷 tugmasi ishlaydi.</span>';
+  }catch(e){ $('aiStatus').innerHTML='<span style="color:var(--anor)">Serverga ulanib bo\'lmadi. Manzil va internetni tekshiring.</span>'; }
+};
+
+$('photoBtn').onclick=async()=>{
+  if(!aiBase()){
+    openSheet(`<h2>📷 Rasm orqali hisoblash</h2><p>Bu funksiya AI server orqali ishlaydi. Profil → «Rasm orqali hisoblash (AI)» bo'limiga server manzili va maxfiy so'zni kiriting.</p>
+      <button class="btn" style="width:100%" id="goAi">Sozlamaga o'tish</button>`);
+    $('goAi').onclick=()=>{closeSheet();document.querySelector('nav.tabs button[data-tab="prof"]').click();setTimeout(()=>$('aiUrl').scrollIntoView({block:'center'}),100);};
+    return;
+  }
+  if(NATIVE&&CapP.Camera){
+    try{
+      const ph=await CapP.Camera.getPhoto({quality:75,width:1280,resultType:'base64',source:'PROMPT',correctOrientation:true,
+        promptLabelHeader:'Ovqat rasmi',promptLabelPhoto:'Galereyadan tanlash',promptLabelPicture:'Suratga olish',promptLabelCancel:'Bekor qilish'});
+      if(ph&&ph.base64String) photoReady('data:image/'+(ph.format||'jpeg')+';base64,'+ph.base64String);
+    }catch(e){ if(!/cancel/i.test(String(e&&e.message))) toast('Kamera ochilmadi'); }
+    return;
+  }
+  $('photoIn').value='';$('photoIn').click();
+};
+$('photoIn').onchange=e=>{const f=e.target.files&&e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>photoReady(r.result);r.readAsDataURL(f);};
+
+function shrink(dataUrl,max=1024){return new Promise((ok,bad)=>{const im=new Image();im.onload=()=>{
+  const k=Math.min(1,max/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);
+  c.getContext('2d').drawImage(im,0,0,c.width,c.height);ok(c.toDataURL('image/jpeg',0.8));};im.onerror=bad;im.src=dataUrl;});}
+
+async function photoReady(dataUrl){
+  let small;try{small=await shrink(dataUrl,1024);}catch(e){toast("Rasmni o'qib bo'lmadi");return;}
+  openSheet(`<h2>Rasmni tahlil qilish</h2><img class="photoprev" src="${small}" alt="Tanlangan rasm">
+    <label class="muted small" for="aiHint">Izoh (ixtiyoriy) — aniqlikni oshiradi</label>
+    <input id="aiHint" placeholder="Masalan: uy palovi, go'shti ko'p, katta tovoq">
+    <button class="btn" style="width:100%;margin-top:12px" id="aiGo">Hisoblash</button>
+    <button class="btn ghost" style="width:100%;margin-top:8px" onclick="closeSheet()">Bekor qilish</button>`);
+  $('aiGo').onclick=()=>{const hint=$('aiHint').value.trim();closeSheet();
+    const thumb=small;const p={uid:'ai'+Date.now(),unknown:true,ai:true,state:'ai',text:'Rasm',thumb,img:small.split(',')[1],hint};
+    pending.push(p);renderPreview();try{$('preview').scrollIntoView({behavior:'smooth',block:'nearest'});}catch(e){}
+    runAI(p);};
+}
+
+async function runAI(p){
+  p.state='ai';renderPreview();
+  try{
+    const ctrl=new AbortController();const to=setTimeout(()=>ctrl.abort(),120000);
+    const r=await fetch(aiBase()+'/api/photo',{method:'POST',signal:ctrl.signal,headers:{'Content-Type':'application/json','X-App-Token':aiCfg.tok||''},
+      body:JSON.stringify({image:p.img,mime:'image/jpeg',hint:p.hint||'',names:allFoods().map(f=>f.name)})});
+    clearTimeout(to);const j=await r.json().catch(()=>({}));
+    if(!r.ok){ throw new Error(r.status===401?"Maxfiy so'z noto'g'ri. Profil bo'limida tekshiring.":r.status===429?"AI kunlik limiti tugadi. Birozdan keyin urinib ko'ring yoki matn bilan yozing.":(j.error||'Server xatosi')); }
+    const items=j.items||[];
+    if(!items.length) throw new Error(j.note||"Rasmda ovqat topilmadi. Boshqa burchakdan suratga oling.");
+    const index=buildIndex(allFoods());const out=[];
+    for(const x of items){
+      const key=mkey(x.name);let best=null,bs=0;
+      for(const e of index){const sc=sim(key,e.k);if(sc>bs){bs=sc;best=e.f;}}
+      let f;
+      if(best&&bs>=0.85) f=best;
+      else f={id:'ai',name:x.name,kcal:Math.round(x.kcal100),p:x.protein100,f:x.fat100,c:x.carbs100,kind:'f'};
+      const it={...makeItem(f,x.grams,'g',1,'rasm (AI)'),uid:Math.random().toString(36).slice(2),conf:x.confidence};
+      out.push(it);
+    }
+    const i=pending.indexOf(p);pending.splice(i,1,...out);
+    aiNote={thumb:p.thumb,note:j.note||''};renderPreview();
+    toast('Rasm tahlil qilindi. Grammni tekshirib, qo\'shing',3500);
+  }catch(e){
+    p.state='aierr';p.err=(e.name==='AbortError')?"Server juda uzoq javob bermadi. Qayta urinib ko'ring.":(e.message==='Failed to fetch'||/network|load failed/i.test(e.message))?"Serverga ulanib bo'lmadi. Internet va server manzilini tekshiring.":e.message;
+    renderPreview();
+  }
+}
+$('preview').addEventListener('click',e=>{const u=e.target.dataset&&e.target.dataset.airetry;if(!u)return;const p=pending.find(x=>x.uid===u);if(p)runAI(p);});
+/* AI izohini natija tepasida ko'rsatish */
+const _rp2=renderPreview;
+renderPreview=function(){
+  _rp2();
+  if(aiNote&&pending.some(p=>p.src==='rasm (AI)')){
+    const d=document.createElement('div');d.className='note';
+    d.innerHTML=`<div class="aithumb"><img src="${aiNote.thumb}" alt=""><div><b>AI taxmini.</b> Grammni tekshiring — rasmdan og'irlikni aniq bilib bo'lmaydi.${aiNote.note?'<br><span class="muted small">'+esc(aiNote.note)+'</span>':''}</div></div>`;
+    const h3=$('preview').querySelector('h3');if(h3)h3.after(d);
+  } else if(!pending.some(p=>p.src==='rasm (AI)')) aiNote=null;
+};
 </script>
 </body></html>
