@@ -107,6 +107,18 @@ nav.tabs button[aria-selected="true"]{color:var(--cobalt)}
 .chart svg{display:block;width:100%;min-width:320px;height:auto}
 .spin{display:inline-block;width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--cobalt);border-radius:50%;animation:sp 1s linear infinite;vertical-align:-2px;margin-right:6px}
 @keyframes sp{to{transform:rotate(360deg)}}
+
+.rem{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line)}
+.rem:first-child{border-top:none}
+.rem .t{flex:1} .rem .t span{display:block;font-size:13px;color:var(--muted)}
+.rem input[type=time]{width:104px;padding:8px}
+.sw{position:relative;width:48px;height:28px;flex:0 0 48px;border-radius:20px;background:var(--line);padding:0}
+.sw::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;transition:left .2s}
+.sw[aria-checked="true"]{background:var(--leaf)} .sw[aria-checked="true"]::after{left:23px}
+.scanbox{position:relative;border-radius:14px;overflow:hidden;background:#000;aspect-ratio:4/3;margin:10px 0}
+.scanbox video{width:100%;height:100%;object-fit:cover;display:block}
+.scanbox::after{content:"";position:absolute;left:10%;right:10%;top:50%;height:2px;background:var(--anor);box-shadow:0 0 8px var(--anor)}
+.bc{font-size:12px;color:var(--muted)}
 </style></head><body>
 <div class="wrap">
 <header class="top"><h1>Me'yor</h1><span class="d" id="today"></span></header>
@@ -123,6 +135,7 @@ nav.tabs button[aria-selected="true"]{color:var(--cobalt)}
     <textarea id="meal" placeholder="Masalan: 1 tovoq palov, 2 bo'lak qora non, 1 stakan shirin choy"></textarea>
     <div class="inrow">
       <button class="mic" id="micBtn" aria-label="Ovoz bilan kiritish" title="Ovoz bilan kiritish">🎤</button>
+      <button class="mic" id="scanBtn" aria-label="Shtrix-kodni skanerlash" title="Shtrix-kodni skanerlash"><svg width="24" height="20" viewBox="0 0 24 20" aria-hidden="true"><g fill="currentColor"><rect x="0" y="0" width="2" height="20"/><rect x="4" y="0" width="1" height="20"/><rect x="7" y="0" width="3" height="20"/><rect x="12" y="0" width="1" height="20"/><rect x="15" y="0" width="2" height="20"/><rect x="19" y="0" width="1" height="20"/><rect x="22" y="0" width="2" height="20"/></g></svg></button>
       <button class="btn" id="calcBtn">Hisoblash</button>
     </div>
     <div class="chips" id="chips"></div>
@@ -166,6 +179,11 @@ nav.tabs button[aria-selected="true"]{color:var(--cobalt)}
     <h2>O'zim qo'shgan mahsulotlar</h2>
     <p class="muted small">Bazada yo'q, internetdan topilgan yoki qo'lda kiritilgan mahsulotlar shu yerda saqlanadi.</p>
     <div id="custom"></div>
+  </div>
+  <div class="card">
+    <h2>Eslatmalar</h2>
+    <p class="muted small" id="remNote">Telefon sizga ovqatni kiritish, suv ichish va mashq qilishni eslatib turadi.</p>
+    <div id="rem"></div>
   </div>
   <div class="card">
     <h2>Sozlamalar</h2>
@@ -637,7 +655,7 @@ $('meal').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.prev
 function calc(){
   const txt=$('meal').value.trim(); if(!txt){toast("Avval nima yeganingizni yozing");return;}
   const r=parseMeal(txt,allFoods());
-  pending=r.items.map(i=>({...i,uid:Math.random().toString(36).slice(2)}));
+  pending=pending.filter(p=>p.src==='shtrix-kod'||p.barcode).concat(r.items.map(i=>({...i,uid:Math.random().toString(36).slice(2)})));
   r.unknown.forEach(u=>pending.push({uid:Math.random().toString(36).slice(2),unknown:true,text:u.text,qty:u.qty,unit:u.unit,mult:u.mult,state:'search'}));
   renderPreview();
   pending.filter(p=>p.unknown).forEach(lookupOnline);
@@ -754,8 +772,8 @@ $('log').addEventListener('click',e=>{const id=e.target.dataset.del;if(!id)retur
 function rng(seed){let h=0;for(const c of seed)h=Math.imul(31,h)+c.charCodeAt(0)|0;return()=>{h=Math.imul(h^h>>>15,h|1);h^=h+Math.imul(h^h>>>7,h|61);return((h^h>>>14)>>>0)/4294967296;};}
 function streak(){let n=0;const d=new Date();d.setDate(d.getDate()-1);
   for(let i=0;i<60;i++){const k=dkey(d);const done=Object.keys(taskDone[k]||{}).length;if(done>=2){n++;d.setDate(d.getDate()-1);}else break;}return n;}
-function genTasks(){
-  const k=dkey(),r=rng(k+profile.goal),st=streak(),w=profile.weight,kpm=met=>met*3.5*w/200;
+function genTasks(k){
+  const isToday=!k||k===dkey(); k=k||dkey(); const r=rng(k+profile.goal),st=streak(),w=profile.weight,kpm=met=>met*3.5*w/200;
   const lvl=Math.min(st,15);const R=(a,b,s=5)=>Math.round((a+(b-a)*r())/s)*s;
   const list=[];
   if(profile.goal==='gain'){
@@ -779,7 +797,7 @@ function genTasks(){
       {id:'late',t:"Soat 20:00 dan keyin ovqat yemang",s:'Faqat suv yoki shakarsiz choy',burn:0},
       {id:'steps',t:`${R(6,10,1)} ming qadam yuring`,s:'Telefoningiz qadam hisoblagichida tekshiring',burn:250}];
     pool.sort(()=>r()-.5).slice(0,4).forEach(x=>list.push(x));
-    const over=todayLog().reduce((a,e)=>a+e.kcal,0)-T().target;
+    const over=isToday?todayLog().reduce((a,e)=>a+e.kcal,0)-T().target:0;
     if(over>0) list.push({id:'extra',t:`Qo'shimcha ${walkMin(over)} daqiqa yuring`,s:`Normadan oshgan ${over} kkal uchun`,burn:over});
   }
   return list;
@@ -838,7 +856,7 @@ function profileForm(first){
     if(!(age>=12&&age<=100)){toast('Yoshni kiriting (12–100)');return;} if(!(h>=120&&h<=230)){toast("Bo'yni sm da kiriting");return;} if(!(w>=30&&w<=300)){toast('Vaznni kg da kiriting');return;}
     profile={name:$('pName').value.trim(),age,height:h,weight:w,targetWeight:+$('pTW').value||null,sex:sel.sex,goal:sel.goal,pace:sel.pace,activity:+$('pAct').value};
     S.set('profile',profile);if(!weights.length){weights.push({d:dkey(),v:w});S.set('weights',weights);}
-    closeSheet();renderAll();const t=T();toast(`Kunlik normangiz: ${t.target} kkal`,3500);};
+    closeSheet();renderAll();const t=T();toast(`Kunlik normangiz: ${t.target} kkal`,3500);if(typeof scheduleAll==='function')setTimeout(()=>scheduleAll(false),800);};
 }
 function renderProfile(){
   const t=T(),p=profile,g={lose:'Ozish',keep:'Vaznni saqlash',gain:'Semirish'}[p.goal];
@@ -850,10 +868,10 @@ function renderProfile(){
    <p class="small muted">${p.sex==='m'?'Erkak':'Ayol'}, ${p.age} yosh, ${p.height} sm, ${p.weight} kg</p>
    <button class="btn ghost" id="editP" style="width:100%">Profilni tahrirlash</button>`;
   $('editP').onclick=()=>profileForm(false);
-  $('custom').innerHTML=custom.length?custom.map(c=>`<div class="item"><div class="nm"><b>${esc(c.name)}</b><span class="small muted">${c.kcal} kkal / 100 g</span></div><button class="x" data-cdel="${c.id}" aria-label="O'chirish">✕</button></div>`).join(''):'<p class="muted small">Hozircha yo\'q.</p>';
+  $('custom').innerHTML=custom.length?custom.map(c=>`<div class="item"><div class="nm"><b>${esc(c.name)}</b><span class="small muted">${c.kcal} kkal / 100 g${c.barcode?' · shtrix-kod':''}</span></div><button class="x" data-cdel="${c.id}" aria-label="O'chirish">✕</button></div>`).join(''):'<p class="muted small">Hozircha yo\'q.</p>';
 }
 $('custom').addEventListener('click',e=>{const id=e.target.dataset.cdel;if(!id)return;custom=custom.filter(c=>c.id!==id);S.set('custom',custom);renderProfile();});
-$('resetBtn').onclick=()=>{if(!confirm("Barcha ma'lumotlar o'chiriladi. Davom etasizmi?"))return;['profile','logs','tasks','water','custom','weights','flags','lang'].forEach(k=>{try{localStorage.removeItem('meyor_'+k);}catch(e){}delete MEM[k];});location.reload();};
+$('resetBtn').onclick=()=>{if(!confirm("Barcha ma'lumotlar o'chiriladi. Davom etasizmi?"))return;['profile','logs','tasks','water','custom','weights','flags','lang','rems','askedNotif'].forEach(k=>{try{localStorage.removeItem('meyor_'+k);}catch(e){}delete MEM[k];});location.reload();};
 
 /* ===== OVOZ ===== */
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;let rec=null;
@@ -889,8 +907,169 @@ document.querySelectorAll('nav.tabs button').forEach(b=>b.onclick=()=>{
 
 function renderAll(){
   const d=new Date();$('today').textContent=`${KUNLAR[d.getDay()]}, ${d.getDate()} ${OYLAR[d.getMonth()]}`;
-  if(!profile)return;renderPlate();renderLog();renderTasks();renderHist();renderProfile();
+  if(!profile)return;renderPlate();renderLog();renderTasks();renderHist();renderProfile();try{renderRem();}catch(e){}
 }
 renderAll();if(!profile)profileForm(true);
+
+/* ===== SHTRIX-KOD ===== */
+const NATIVE=!!(window.Capacitor&&window.Capacitor.isNativePlatform&&window.Capacitor.isNativePlatform());
+const CapP=NATIVE?(window.Capacitor.Plugins||{}):{};
+$('scanBtn').onclick=startScan;
+async function startScan(){
+  if(NATIVE&&CapP.BarcodeScanner){
+    const B=CapP.BarcodeScanner;
+    try{
+      const m=await B.isGoogleBarcodeScannerModuleAvailable();
+      if(m&&!m.available){toast("Skaner birinchi marta yuklanmoqda, bir oz kuting…",4000);await B.installGoogleBarcodeScannerModule();await new Promise(r=>setTimeout(r,3000));}
+      const r=await B.scan({formats:['EAN_13','EAN_8','UPC_A','UPC_E','CODE_128']});
+      const code=r&&r.barcodes&&r.barcodes[0]&&(r.barcodes[0].rawValue||r.barcodes[0].displayValue);
+      if(code) handleBarcode(code);
+    }catch(e){ if(!/cancel/i.test(String(e&&e.message))) {toast("Skaner ochilmadi. Kodni qo'lda kiriting");barcodeSheet(false);} }
+    return;
+  }
+  barcodeSheet('BarcodeDetector' in window);
+}
+let camStream=null,camTimer=null;
+function stopCam(){clearInterval(camTimer);camTimer=null;if(camStream){camStream.getTracks().forEach(t=>t.stop());camStream=null;}}
+async function barcodeSheet(withCam){
+  openSheet(`<h2>Shtrix-kod</h2>${withCam?'<div class="scanbox"><video id="bcVid" playsinline muted></video></div><p class="muted small">Kodni qizil chiziq ustiga to\'g\'rilang.</p>':'<p class="muted small">Mahsulot qadog\'idagi shtrix-kod ostidagi raqamlarni kiriting.</p>'}
+   <div class="row"><input id="bcIn" inputmode="numeric" placeholder="Masalan: 4780000000000"><button class="btn" id="bcGo">Topish</button></div>
+   <button class="btn ghost" style="width:100%;margin-top:12px" id="bcClose">Yopish</button>`);
+  $('bcClose').onclick=()=>{stopCam();closeSheet();};
+  $('bcGo').onclick=()=>{const v=$('bcIn').value.replace(/\D/g,'');if(v.length<6){toast("Kod kamida 8 ta raqamdan iborat bo'ladi");return;}stopCam();closeSheet();handleBarcode(v);};
+  if(!withCam) return;
+  try{
+    camStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
+    const v=$('bcVid');v.srcObject=camStream;await v.play();
+    const det=new BarcodeDetector({formats:['ean_13','ean_8','upc_a','upc_e','code_128']});
+    camTimer=setInterval(async()=>{try{const r=await det.detect(v);if(r.length){const c=r[0].rawValue;stopCam();closeSheet();handleBarcode(c);}}catch(e){}},400);
+  }catch(e){ const sb=document.querySelector('.scanbox'); if(sb) sb.outerHTML='<p class="note warn">Kameraga ruxsat berilmadi. Raqamlarni qo\'lda kiriting.</p>'; }
+}
+async function handleBarcode(code){
+  code=String(code).trim();
+  const local=custom.find(c=>c.barcode===code);
+  if(local){addBarcodeItem(local,local.defG||100);return;}
+  pending.push({uid:'bc'+code,unknown:true,text:'Shtrix-kod '+code,barcode:code,state:'search',qty:1,unit:null});renderPreview();
+  const idx=()=>pending.findIndex(p=>p.uid==='bc'+code);
+  try{
+    const ctrl=new AbortController();const to=setTimeout(()=>ctrl.abort(),9000);
+    const res=await fetch('https://world.openfoodfacts.org/api/v2/product/'+encodeURIComponent(code)+'.json?fields=product_name,product_name_ru,product_name_en,brands,nutriments,serving_quantity,product_quantity,quantity',{signal:ctrl.signal});
+    clearTimeout(to);const js=await res.json();
+    const p=js&&js.status===1&&js.product;const n=(p&&p.nutriments)||{};
+    let k=n['energy-kcal_100g'];if(k==null&&n.energy_100g)k=n.energy_100g/4.184;
+    if(!p||!(k>=0)||k===undefined) throw new Error('notfound');
+    const name=((p.product_name||p.product_name_ru||p.product_name_en||'Mahsulot').trim()+(p.brands?' ('+p.brands.split(',')[0].trim()+')':''));
+    let defG=+p.serving_quantity||0; const pq=+p.product_quantity||0; if(!defG) defG=(pq&&pq<=600)?pq:100;
+    const f=addCustom(name,{kcal:Math.round(k),p:+n.proteins_100g||0,f:+n.fat_100g||0,c:+n.carbohydrates_100g||0});
+    f.barcode=code;f.defG=Math.round(defG);f.src='internet';S.set('custom',custom);
+    const i=idx();if(i>=0)pending.splice(i,1);addBarcodeItem(f,f.defG);
+  }catch(e){
+    const i=idx();if(i<0)return;const p=pending[i];
+    p.state=(e.message==='notfound')?'bcnone':'offline';renderPreview();
+  }
+}
+function addBarcodeItem(f,g){
+  const it={...makeItem(f,g,'g',1,'shtrix-kod'),uid:Math.random().toString(36).slice(2)};
+  pending.push(it);renderPreview();toast(f.name+' topildi');
+  try{$('preview').scrollIntoView({behavior:'smooth',block:'nearest'});}catch(e){}
+}
+/* shtrix-kod topilmaganda: nom + kaloriya kiritish formasi */
+const _rp=renderPreview;
+renderPreview=function(){
+  _rp();
+  pending.filter(p=>p.barcode&&(p.state==='bcnone'||p.state==='offline')).forEach(p=>{
+    const box=document.createElement('div');box.className='note warn';
+    box.innerHTML=`${p.state==='offline'?"Internet bazasiga ulanib bo'lmadi.":"Bu kod ochiq bazada hali yo'q."} Mahsulotni bir marta kiriting — keyingi skanerlashda darhol chiqadi.
+      <div class="bc">Kod: ${esc(p.barcode)}</div>
+      <input placeholder="Nomi (masalan: Kola 0.5 l)" id="bn_${p.uid}" style="margin-top:8px">
+      <div class="grid2" style="margin-top:8px"><input type="number" inputmode="numeric" placeholder="kkal / 100 g" id="bk_${p.uid}"><input type="number" inputmode="numeric" placeholder="necha gramm" value="100" id="bg_${p.uid}"></div>
+      <p class="muted small" style="margin:6px 0 0">Qadoqdagi «Энергетическая ценность / Energiya qiymati» qatoriga qarang.</p>
+      <div class="row" style="margin-top:8px"><button class="btn ghost" style="flex:1" data-bcsave="${p.uid}">Saqlash</button><button class="x" data-rm="${p.uid}">✕</button></div>`;
+    const old=[...$('preview').querySelectorAll('.note')].find(n=>n.textContent.includes('Shtrix-kod '+p.barcode));
+    if(old) old.replaceWith(box); else $('preview').prepend(box);
+  });
+};
+$('preview').addEventListener('click',e=>{
+  const u=e.target.dataset&&e.target.dataset.bcsave;if(!u)return;
+  const p=pending.find(x=>x.uid===u);const nm=$('bn_'+u).value.trim(),k=+$('bk_'+u).value,g=+$('bg_'+u).value;
+  if(!nm||!(k>=0)||!$('bk_'+u).value||!g){toast("Nom, kaloriya va grammni kiriting");return;}
+  const f=addCustom(nm,{kcal:k});f.barcode=p.barcode;f.defG=g;S.set('custom',custom);
+  pending=pending.filter(x=>x!==p);addBarcodeItem(f,g);
+});
+
+/* ===== ESLATMALAR ===== */
+const REM_DEF=[
+ {id:'wake',nid:70,title:"Uyg'onish",sub:"Tong salomi va bugungi reja",on:true,time:'07:00',msgs:["Xayrli tong! ☀️"]},
+ {id:'breakfast',nid:11,title:'Nonushta',sub:'Nonushtani kiritishni eslatadi',on:true,time:'08:30',msgs:["Nonushta qildingizmi? Me'yorga yozib qo'ying 🍳","Kun nonushtadan boshlanadi — nima yedingiz?"]},
+ {id:'lunch',nid:12,title:'Tushlik',sub:'Tushlikni kiritishni eslatadi',on:true,time:'13:30',msgs:["Tushlikni kiritishni unutmang 🍲","Tushlikda nima yedingiz? Hisobni yuritamiz."]},
+ {id:'dinner',nid:13,title:'Kechki ovqat',sub:'Kechki ovqatni kiritishni eslatadi',on:true,time:'19:30',msgs:["Kechki ovqatni yozib qo'ying 🌙","Bugungi hisobni yakunlaylik — kechki ovqat nima bo'ldi?"]},
+ {id:'water',nid:20,title:'Suv ichish',sub:'Kun davomida har 2 soatda (10:00–20:00)',on:true,time:null,msgs:["Bir stakan suv iching 💧","Chanqoqlik ko'pincha ochlikka o'xshaydi. Suv vaqti! 💧","Suv — kaloriyasiz yordamchingiz. Bir stakan iching."]},
+ {id:'tasks',nid:30,title:'Vazifalar',sub:'Bugungi mashqlarni eslatadi',on:true,time:'18:00',msgs:["Bugungi vazifalarni bajardingizmi? 🏃","Yurish vaqti! Bugungi mashqlar sizni kutmoqda.","Bir necha daqiqa harakat — kechqurun yaxshi kayfiyat."]},
+ {id:'walk',nid:60,title:'Yurish vaqti',sub:'Bugungi yurish mashqi',on:true,time:'18:30',msgs:["Yurish vaqti! 🚶"]},
+ {id:'sleep',nid:80,title:'Uyqu vaqti',sub:"Yotishdan oldin eslatadi",on:true,time:'23:00',msgs:["Uxlash vaqti 😴 Yaxshi uyqu ishtahani tartibga soladi.","Telefonni qo'ying, chiroqni o'chiring 🌙 7–8 soat uyqu ozishga yordam beradi.","Kech tungi tamaddi — ozishning eng katta dushmani. Yaxshisi, uxlang 😴"]},
+ {id:'weight',nid:40,title:'Haftalik tortilish',sub:'Har dushanba ertalab',on:true,time:'08:00',msgs:["Dushanba — tarozi kuni ⚖️ Vazningizni kiriting."]}];
+let rems=S.get('rems',null);
+if(!rems) rems=REM_DEF.map(r=>({id:r.id,on:r.on,time:r.time}));
+REM_DEF.forEach(r=>{if(!rems.find(x=>x.id===r.id))rems.push({id:r.id,on:r.on,time:r.time});});
+const remCfg=id=>rems.find(r=>r.id===id)||{};
+function sleepHint(){const w=remCfg('wake'),sl=remCfg('sleep');if(!w.on||!sl.on)return'';
+  const [wh,wm]=(w.time||'07:00').split(':').map(Number),[sh,sm]=(sl.time||'23:00').split(':').map(Number);
+  let mins=(wh*60+wm)-(sh*60+sm);if(mins<=0)mins+=1440;const h=+(mins/60).toFixed(1);
+  return `<p class="note ${h<7||h>9.5?'warn':''}" style="margin-top:10px">Uyqu davomiyligi: <b>${h} soat</b>. ${h<7?"Bu kam. Kamida 7 soat uxlagan odamda ochlik gormoni kamroq bo'ladi.":h>9.5?"Bu ko'p. Odatda 7–9 soat yetarli.":"Ajoyib, 7–9 soat — eng to'g'ri oraliq."}</p>`;}
+function renderRem(){
+  if(!NATIVE||!CapP.LocalNotifications){$('remNote').textContent="Eslatmalar telefondagi (APK) ilovada ishlaydi. Brauzerda ular o'chiq.";}
+  const tw=profile?genTasks().find(x=>x.id==='walk'):null;
+  $('rem').innerHTML=REM_DEF.map(d=>{const c=remCfg(d.id);const sub=d.id==='walk'&&tw?`Bugun: ${tw.t.toLowerCase()}`:d.sub;return `<div class="rem"><div class="t">${d.title}<span>${sub}</span></div>
+    ${d.time?`<input type="time" value="${c.time||d.time}" data-rtime="${d.id}" aria-label="${d.title} vaqti">`:''}
+    <button class="sw" role="switch" aria-checked="${!!c.on}" data-rsw="${d.id}" aria-label="${d.title}"></button></div>`;}).join('')+sleepHint();
+}
+$('rem').addEventListener('click',e=>{const id=e.target.dataset.rsw;if(!id)return;const c=remCfg(id);c.on=!c.on;S.set('rems',rems);renderRem();scheduleAll(true);});
+$('rem').addEventListener('change',e=>{const id=e.target.dataset.rtime;if(!id)return;remCfg(id).time=e.target.value;S.set('rems',rems);renderRem();scheduleAll(true);});
+
+async function scheduleAll(ask){
+  const LN=CapP.LocalNotifications;if(!NATIVE||!LN)return;
+  try{
+    let p=await LN.checkPermissions();
+    if(p.display!=='granted'){ if(!ask&&S.get('askedNotif',false))return; S.set('askedNotif',true); p=await LN.requestPermissions(); }
+    if(p.display!=='granted'){ if(ask)toast("Bildirishnomalarga ruxsat berilmadi. Telefon sozlamalaridan yoqing",4500); return; }
+    const pend=await LN.getPending();
+    if(pend.notifications&&pend.notifications.length) await LN.cancel({notifications:pend.notifications.map(n=>({id:n.id}))});
+    const list=[];
+    for(const d of REM_DEF){ const c=remCfg(d.id); if(!c.on) continue;
+      if(d.id==='wake'||d.id==='walk'){
+        const [h,m]=(c.time||d.time).split(':').map(Number);
+        for(let i=0;i<7;i++){ const at=new Date();at.setDate(at.getDate()+i);at.setHours(h,m,0,0); if(at<=new Date())continue;
+          const k=dkey(at),tk=profile?genTasks(k):[],w=tk.find(x=>x.id==='walk');const mins=w?(w.t.match(/\d+/)||[''])[0]:'';
+          let body;
+          if(d.id==='wake') body=`Xayrli tong! ☀️ Bugungi normangiz: ${T().target} kkal.${mins?` Reja: ${mins} daqiqa yurish.`:''} Kunni bir stakan suv bilan boshlang 💧`;
+          else body=mins?`Yurish vaqti! 🚶 Bugun ${mins} daqiqa yuring — ${profile.goal==='gain'?'ishtahangiz ochiladi':'bu taxminan '+(w.burn||'')+' kkal'}.`:"Yurish vaqti! 🚶 Kiyining va tashqariga chiqing.";
+          list.push({id:d.nid+i,title:"Me'yor",body,schedule:{at,allowWhileIdle:true},extra:{tab:d.id==='walk'?'tasks':'home'}}); }
+        continue;
+      }
+      if(d.id==='water'){ [10,12,14,16,18,20].forEach((h,i)=>list.push({id:d.nid+i,title:"Me'yor",body:d.msgs[i%d.msgs.length],schedule:{on:{hour:h,minute:0},allowWhileIdle:true},extra:{tab:'tasks'}})); continue; }
+      const [h,m]=(c.time||d.time).split(':').map(Number);
+      const on=d.id==='weight'?{weekday:2,hour:h,minute:m}:{hour:h,minute:m};
+      list.push({id:d.nid,title:"Me'yor",body:pick(d.msgs),schedule:{on,allowWhileIdle:true},extra:{tab:d.id==='tasks'?'tasks':d.id==='weight'?'hist':'home'}});
+    }
+    // bugungi holat bo'yicha kechki eslatma
+    const ev=new Date();ev.setHours(21,0,0,0);
+    if(profile&&ev>new Date()){
+      const eaten=todayLog().reduce((a,e)=>a+e.kcal,0),t=T().target;let body;
+      if(profile.goal==='gain') body=eaten<t?`Bugun normaga yana ${t-eaten} kkal yetmayapti. To'yimli tamaddi qiling 🥜`:"Bugungi norma bajarildi. Barakalla! 💪";
+      else body=eaten>t?"Bugungi norma to'lgan. Oshxona yopildi 🌙 Ertaga yangi kun!":eaten===0?"Bugun hech narsa kiritilmadi. Yeganlaringizni yozib qo'ying ✍️":`Bugun ${t-eaten} kkal qoldi. Kechqurun yengil ovqatlaning 🌙`;
+      list.push({id:50,title:"Me'yor",body,schedule:{at:ev,allowWhileIdle:true},extra:{tab:'home'}});
+    }
+    if(list.length) await LN.schedule({notifications:list});
+    if(ask) toast('Eslatmalar saqlandi ✓');
+  }catch(e){ if(ask) toast("Eslatmalarni sozlab bo'lmadi"); }
+}
+if(NATIVE&&CapP.LocalNotifications){
+  try{CapP.LocalNotifications.addListener('localNotificationActionPerformed',a=>{const tab=a&&a.notification&&a.notification.extra&&a.notification.extra.tab;const b=document.querySelector(`nav.tabs button[data-tab="${tab}"]`);if(b)b.click();});}catch(e){}
+}
+/* ovqat qo'shilganda kechki eslatmani yangilash */
+const _commit=commit;
+commit=function(){_commit();scheduleAll(false);};
+renderRem();
+if(profile) setTimeout(()=>scheduleAll(false),1500);
 </script>
 </body></html>

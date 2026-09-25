@@ -2,5 +2,13 @@
   "appId": "uz.meyor.app",
   "appName": "Me'yor",
   "webDir": "www",
-  "android": { "allowMixedContent": false }
+  "android": {
+    "allowMixedContent": false
+  },
+  "plugins": {
+    "LocalNotifications": {
+      "smallIcon": "ic_stat_meyor",
+      "iconColor": "#1F4FA3"
+    }
+  }
 }
