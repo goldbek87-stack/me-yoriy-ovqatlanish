@@ -879,7 +879,7 @@ function profileForm(first){
   document.querySelectorAll('.seg').forEach(sg=>{const f=sg.dataset.f;sg.querySelectorAll('button').forEach(b=>{b.classList.toggle('sel',b.dataset.v===sel[f]);
     b.onclick=()=>{sel[f]=b.dataset.v;sg.querySelectorAll('button').forEach(x=>x.classList.toggle('sel',x===b));};});});
   $('pSave').onclick=()=>{const age=+$('pAge').value,h=+$('pH').value,w=+$('pW').value;
-    if(!(age>=12&&age<=100)){toast('Yoshni kiriting (12–100)');return;} if(!(h>=120&&h<=230)){toast("Bo'yni sm da kiriting");return;} if(!(w>=30&&w<=300)){toast('Vaznni kg da kiriting');return;}
+    if(!(age>=18&&age<=100)){toast('Yoshni kiriting (18–100)');return;} if(!(h>=120&&h<=230)){toast("Bo'yni sm da kiriting");return;} if(!(w>=30&&w<=300)){toast('Vaznni kg da kiriting');return;}
     profile={name:$('pName').value.trim(),age,height:h,weight:w,targetWeight:+$('pTW').value||null,sex:sel.sex,goal:sel.goal,pace:sel.pace,activity:+$('pAct').value};
     S.set('profile',profile);if(!weights.length){weights.push({d:dkey(),v:w});S.set('weights',weights);}
     closeSheet();renderAll();const t=T();toast(`Kunlik normangiz: ${t.target} kkal`,3500);if(typeof scheduleAll==='function')setTimeout(()=>scheduleAll(false),800);};
